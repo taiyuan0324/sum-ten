@@ -1,0 +1,14 @@
+{
+  "pages": [
+    "pages/index/index"
+  ],
+  "window": {
+    "navigationBarBackgroundColor": "#17503c",
+    "navigationBarTitleText": "凑十消除",
+    "navigationBarTextStyle": "white",
+    "backgroundColor": "#0d2419",
+    "backgroundTextStyle": "dark"
+  },
+  "style": "v2",
+  "sitemapLocation": "sitemap.json"
+}

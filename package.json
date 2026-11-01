@@ -1,0 +1,24 @@
+{
+  "name": "sum-ten",
+  "version": "1.0.0",
+  "private": true,
+  "description": "凑十消除 — 框出和为 10 的矩形，把盘面消干净",
+  "scripts": {
+    "serve": "http-server www -p 8080 -c-1",
+    "ios:add": "cap add ios",
+    "ios:sync": "cap sync ios",
+    "ios:open": "cap open ios",
+    "icons": "python3 scripts/make-icons.py"
+  },
+  "dependencies": {
+    "@capacitor/core": "^6.2.1",
+    "@capacitor/haptics": "^6.0.2",
+    "@capacitor/ios": "^6.2.1",
+    "@capacitor/splash-screen": "^6.0.3",
+    "@capacitor/status-bar": "^6.0.3"
+  },
+  "devDependencies": {
+    "@capacitor/cli": "^6.2.1",
+    "http-server": "^14.1.1"
+  }
+}

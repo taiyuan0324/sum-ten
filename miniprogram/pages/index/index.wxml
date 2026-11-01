@@ -1,0 +1,54 @@
+<view class="page">
+
+  <view class="hud">
+    <view class="hudline">
+      <view class="iqbox">
+        <text class="iqlabel">当前得分</text>
+        <text class="iqnum">{{iq}}</text>
+      </view>
+      <view class="bestbox">最高 {{best}}</view>
+    </view>
+    <view class="bar">
+      <view class="barfill" style="width:{{progress}}%"></view>
+      <text class="bartext">{{cleared}} / {{total}} 格</text>
+    </view>
+  </view>
+
+  <view class="boardwrap">
+    <view
+      id="board"
+      class="board"
+      style="width:{{boardW}}px;height:{{boardH}}px"
+      bindtouchstart="onStart"
+      catchtouchmove="onMove"
+      bindtouchend="onEnd"
+      bindtouchcancel="onEnd"
+    >
+      <view class="cell" wx:for="{{cells}}" wx:key="id">
+        <view class="tile {{item.gone ? 'gone' : ''}}" style="font-size:{{fontSize}}px">{{item.v}}</view>
+      </view>
+      <view
+        wx:if="{{sel}}"
+        class="selbox"
+        style="left:{{sel.x}}px;top:{{sel.y}}px;width:{{sel.w}}px;height:{{sel.h}}px"
+      ></view>
+    </view>
+  </view>
+
+  <view class="tools">
+    <view class="tool {{bomb <= 0 ? 'disabled' : ''}}" bindtap="useBomb">炸弹 {{bomb}}</view>
+    <view class="tool" bindtap="restart">换一盘</view>
+  </view>
+
+  <view class="tip">{{tip}}</view>
+
+  <view class="mask" wx:if="{{over}}">
+    <view class="dialog">
+      <view class="dtitle">这一盘消不动了</view>
+      <view class="dnum">{{iq}}</view>
+      <view class="dsub">本局得分 · 最高 {{best}}</view>
+      <view class="dbtn" bindtap="restart">再来一盘</view>
+    </view>
+  </view>
+
+</view>
