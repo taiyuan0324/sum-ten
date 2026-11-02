@@ -1,0 +1,108 @@
+name: Build iOS IPA (unsigned)
+
+on:
+  push:
+    branches: [main]
+    paths-ignore:
+      - '**.md'
+      - 'miniprogram/**'
+  workflow_dispatch:
+
+jobs:
+  build:
+    name: Build unsigned IPA
+    runs-on: macos-14
+    timeout-minutes: 40
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install dependencies
+        run: npm ci --no-audit --no-fund || npm install --no-audit --no-fund
+
+      - name: Add iOS platform
+        run: npx cap add ios
+
+      - name: CocoaPods install (fallback)
+        run: |
+          if [ ! -d "ios/App/Pods" ]; then
+            cd ios/App && pod install --repo-update
+          fi
+
+      - name: Apply icon & Info.plist tweaks
+        run: |
+          set -e
+          ICON_DIR="ios/App/App/Assets.xcassets/AppIcon.appiconset"
+          if [ -f "$ICON_DIR/AppIcon-512@2x.png" ]; then
+            cp assets/icon-1024.png "$ICON_DIR/AppIcon-512@2x.png"
+          else
+            echo "::warning::AppIcon-512@2x.png not found, keeping default icon"
+            ls -la "$ICON_DIR" || true
+          fi
+
+          PLIST="ios/App/App/Info.plist"
+          /usr/libexec/PlistBuddy -c "Set :CFBundleDisplayName 凑十消除" "$PLIST" \
+            || /usr/libexec/PlistBuddy -c "Add :CFBundleDisplayName string 凑十消除" "$PLIST"
+          /usr/libexec/PlistBuddy -c "Set :CFBundleName sumten" "$PLIST" \
+            || /usr/libexec/PlistBuddy -c "Add :CFBundleName string sumten" "$PLIST"
+
+          # 锁定竖屏
+          /usr/libexec/PlistBuddy -c "Delete :UISupportedInterfaceOrientations" "$PLIST" || true
+          /usr/libexec/PlistBuddy -c "Add :UISupportedInterfaceOrientations array" "$PLIST"
+          /usr/libexec/PlistBuddy -c "Add :UISupportedInterfaceOrientations:0 string UIInterfaceOrientationPortrait" "$PLIST"
+
+      - name: Sync web assets
+        run: npx cap sync ios
+
+      - name: Build (code signing disabled)
+        run: |
+          set -e
+          cd ios/App
+          xcodebuild \
+            -workspace App.xcworkspace \
+            -scheme App \
+            -configuration Release \
+            -sdk iphoneos \
+            -derivedDataPath "$GITHUB_WORKSPACE/build" \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGN_IDENTITY="" \
+            CODE_SIGN_ENTITLEMENTS="" \
+            DEVELOPMENT_TEAM="" \
+            clean build
+
+      - name: Package IPA
+        run: |
+          set -e
+          APP_PATH=$(find "$GITHUB_WORKSPACE/build/Build/Products/Release-iphoneos" -maxdepth 1 -name "*.app" | head -n 1)
+          echo "App bundle: $APP_PATH"
+          test -n "$APP_PATH"
+
+          rm -rf Payload && mkdir -p Payload
+          cp -R "$APP_PATH" Payload/
+          zip -qry sumten-unsigned.ipa Payload
+
+          ls -lh sumten-unsigned.ipa
+          unzip -l sumten-unsigned.ipa | head -n 20
+
+      - name: Upload IPA
+        uses: actions/upload-artifact@v4
+        with:
+          name: sumten-unsigned-ipa
+          path: sumten-unsigned.ipa
+          retention-days: 30
+          if-no-files-found: error
+
+      - name: Upload .app bundle (backup)
+        uses: actions/upload-artifact@v4
+        with:
+          name: sumten-app-bundle
+          path: build/Build/Products/Release-iphoneos/*.app
+          retention-days: 14
+          if-no-files-found: warn
