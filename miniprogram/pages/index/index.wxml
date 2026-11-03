@@ -24,7 +24,7 @@
       bindtouchend="onEnd"
       bindtouchcancel="onEnd"
     >
-      <view class="cell" wx:for="{{cells}}" wx:key="id">
+      <view class="cell" wx:for="{{cells}}" wx:key="id" style="width:{{cellW}}px;height:{{cellH}}px">
         <view class="tile {{item.gone ? 'gone' : ''}}" style="font-size:{{fontSize}}px">{{item.v}}</view>
       </view>
       <view
@@ -40,7 +40,7 @@
     <view class="tool" bindtap="restart">换一盘</view>
   </view>
 
-  <view class="tip">{{tip}}</view>
+  <view class="tip {{dragging ? (sumOk ? 'ok' : 'warn') : ''}}">{{dragging ? sumText : tip}}</view>
 
   <view class="mask" wx:if="{{over}}">
     <view class="dialog">

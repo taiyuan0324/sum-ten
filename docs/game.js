@@ -2,6 +2,10 @@
  * 规则：框选一个矩形，框内「剩余」数字之和等于 10 即可消除；
  *       消除后格子留空，其他数字位置不变；得分 = 消除的数字个数。
  * 该文件同时被 Web / Capacitor(iOS) 使用。
+ *
+ * 交互：按住任意格子 → 拖动画出一个矩形 → 松手判定。
+ *       iOS 的 WKWebView 在 pointerdown 里 preventDefault 后会吞掉 pointermove，
+ *       所以这里优先走 touch 事件，鼠标作为桌面端回退。
  */
 (function () {
   'use strict';
@@ -20,6 +24,7 @@
 
   var grid = new Array(TOTAL).fill(0);
   var tiles = new Array(TOTAL).fill(null);
+  var cellEls = new Array(TOTAL).fill(null);
   var cellSize = 30;
 
   var score = 0;
@@ -29,8 +34,10 @@
   var pending = false;
   var best = readBest();
 
-  var startCell = null;
-  var endCell = null;
+  var dragging = false;
+  var dragFrom = null;
+  var dragTo = null;
+  var hlSet = Object.create(null);
   var tipTimer = 0;
 
   /* ---------------- 工具 ---------------- */
@@ -77,7 +84,6 @@
 
   function layout() {
     var stage = boardEl.parentNode;
-    // 用容器的真实尺寸，而不是 innerWidth：iOS 安全区/滚动条都会让两者不等
     var wrapW = (stage && stage.clientWidth) || (document.documentElement.clientWidth - 24) || 320;
     var wrapH = (stage && stage.clientHeight) || 0;
 
@@ -88,8 +94,6 @@
     wrapH -= 2;
 
     var s = Math.floor(Math.min(wrapW / COLS, wrapH / ROWS));
-
-    // 兜底：极窄屏也保证 14px 以上，避免数字糊成一团
     if (s < 14) s = 14;
     if (s > 52) s = 52;
     cellSize = s;
@@ -103,6 +107,8 @@
     for (var i = 0; i < TOTAL; i++) {
       if (tiles[i]) tiles[i].style.fontSize = fs + 'px';
     }
+    // 尺寸变了，正在拖的框要重画
+    if (dragging) renderSel();
   }
 
   /* ---------------- 生成盘面 ---------------- */
@@ -128,6 +134,7 @@
     boardEl.innerHTML = '';
     boardEl.appendChild(selbox);
     tiles = new Array(TOTAL).fill(null);
+    cellEls = new Array(TOTAL).fill(null);
 
     var frag = document.createDocumentFragment();
     for (var i = 0; i < TOTAL; i++) {
@@ -139,6 +146,7 @@
       cell.appendChild(tile);
       frag.appendChild(cell);
       tiles[i] = tile;
+      cellEls[i] = cell;
     }
     boardEl.appendChild(frag);
   }
@@ -159,15 +167,17 @@
     bomb = BOMB_INIT;
     over = false;
     pending = false;
-    startCell = null;
-    endCell = null;
+    dragging = false;
+    dragFrom = null;
+    dragTo = null;
+    hlSet = Object.create(null);
 
     buildDom();
     layout();
     updateHud();
     hideSel();
     maskEl.classList.remove('on');
-    flashTip('按住拖动，框出和为 10 的矩形');
+    flashTip('按住格子拖动画框，和等于 10 就能消');
   }
 
   /* ---------------- HUD ---------------- */
@@ -192,7 +202,6 @@
         var base2 = r2 * COLS;
         for (var c = 0; c < COLS; c++) acc[c] += grid[base2 + c];
 
-        // 列前缀和，配合双指针之外的双重循环（COLS 只有 10，直接枚举更快）
         var pre = [0];
         var run = 0;
         for (var k = 0; k < COLS; k++) { run += acc[k]; pre.push(run); }
@@ -222,14 +231,15 @@
     return { sum: sum, cnt: cnt };
   }
 
-  /* ---------------- 框选交互 ---------------- */
+  /* ---------------- 框选绘制 ---------------- */
 
-  function hitTest(x, y) {
-    var rect = boardEl.getBoundingClientRect();
-    var c = Math.floor((x - rect.left) / cellSize);
-    var r = Math.floor((y - rect.top) / cellSize);
-    if (r < 0) r = 0; if (r >= ROWS) r = ROWS - 1;
-    if (c < 0) c = 0; if (c >= COLS) c = COLS - 1;
+  function pointToCell(x, y) {
+    var br = boardEl.getBoundingClientRect();
+    var c = Math.floor((x - br.left) / cellSize);
+    var r = Math.floor((y - br.top) / cellSize);
+    // 允许拖出棋盘：贴边取最近的格子，松手前都能继续调整
+    if (r < 0) r = 0; else if (r >= ROWS) r = ROWS - 1;
+    if (c < 0) c = 0; else if (c >= COLS) c = COLS - 1;
     return { r: r, c: c };
   }
 
@@ -240,65 +250,91 @@
     };
   }
 
-  function drawSel(a, b) {
-    var d = bounds(a, b);
+  function clearHL() {
+    for (var k in hlSet) {
+      var el = cellEls[+k];
+      if (el) el.classList.remove('hl');
+    }
+    hlSet = Object.create(null);
+  }
+
+  function setHL(d) {
+    var next = Object.create(null);
+    for (var r = d.r1; r <= d.r2; r++) {
+      var base = r * COLS;
+      for (var c = d.c1; c <= d.c2; c++) next[base + c] = 1;
+    }
+    // 只增删差异，避免每次全量改 160 个 class
+    for (var k in hlSet) {
+      if (!next[k] && cellEls[+k]) cellEls[+k].classList.remove('hl');
+    }
+    for (var k2 in next) {
+      if (!hlSet[k2] && cellEls[+k2]) cellEls[+k2].classList.add('hl');
+    }
+    hlSet = next;
+  }
+
+  function renderSel() {
+    var d = bounds(dragFrom, dragTo);
     var x = d.c1 * cellSize;
     var y = d.r1 * cellSize;
     var w = (d.c2 - d.c1 + 1) * cellSize;
     var h = (d.r2 - d.r1 + 1) * cellSize;
 
     selbox.style.display = 'block';
-    selbox.style.left = x + 'px';
-    selbox.style.top = y + 'px';
+    selbox.style.transform = 'translate3d(' + x + 'px,' + y + 'px,0)';
     selbox.style.width = w + 'px';
     selbox.style.height = h + 'px';
 
+    setHL(d);
+
     var res = sumOf(d.r1, d.c1, d.r2, d.c2);
-    selSum.textContent = res.sum + (res.sum === 10 ? ' ✓' : '');
-    selSum.className = 'sel-sum' + (res.sum === 10 ? ' ok' : (res.sum > 10 ? ' bad' : ''));
+    var ok = res.sum === 10 && res.cnt > 0;
+    selSum.textContent = ok ? (res.sum + ' ✓') : (res.sum + ' / 10');
+    selSum.className = 'sel-sum' + (ok ? ' ok' : (res.sum > 10 ? ' bad' : ''));
     selSum.style.display = 'block';
 
-    // 气泡用 fixed 定位（不受棋盘 overflow:hidden 裁剪）
     var br = boardEl.getBoundingClientRect();
     selSum.style.left = (br.left + x + w / 2) + 'px';
-    var topY = br.top + y - 6;
-    if (topY < 52) topY = br.top + y + h + 32;   // 贴顶时改到框下方
+    var topY = br.top + y - 8;
+    if (topY < 54) topY = br.top + y + h + 34;   // 贴顶时挪到框下方
     selSum.style.top = topY + 'px';
   }
 
   function hideSel() {
     selbox.style.display = 'none';
     selSum.style.display = 'none';
+    clearHL();
   }
 
-  function onDown(e) {
-    if (over) return;
-    if (e.button !== undefined && e.button !== 0 && e.pointerType === 'mouse') return;
-    e.preventDefault();
-    startCell = hitTest(e.clientX, e.clientY);
-    endCell = startCell;
-    drawSel(startCell, startCell);
-    try { boardEl.setPointerCapture(e.pointerId); } catch (err) {}
+  /* ---------------- 拖拽状态机 ---------------- */
+
+  function beginDrag(x, y) {
+    if (over || pending) return false;
+    var p = pointToCell(x, y);
+    dragging = true;
+    dragFrom = p;
+    dragTo = { r: p.r, c: p.c };
+    renderSel();
+    haptic('light');
+    return true;
   }
 
-  function onMove(e) {
-    if (!startCell) return;
-    e.preventDefault();
-    var p = hitTest(e.clientX, e.clientY);
-    if (p.r !== endCell.r || p.c !== endCell.c) {
-      endCell = p;
-      drawSel(startCell, endCell);
+  function moveDrag(x, y) {
+    if (!dragging) return;
+    var p = pointToCell(x, y);
+    if (p.r !== dragTo.r || p.c !== dragTo.c) {
+      dragTo = p;
+      renderSel();
     }
   }
 
-  function onUp(e) {
-    if (!startCell) return;
-    if (e && e.clientX !== undefined) {
-      endCell = hitTest(e.clientX, e.clientY);
-    }
-    var d = bounds(startCell, endCell);
-    startCell = null;
-    endCell = null;
+  function endDrag() {
+    if (!dragging) return;
+    dragging = false;
+    var d = bounds(dragFrom, dragTo);
+    dragFrom = null;
+    dragTo = null;
     hideSel();
 
     var res = sumOf(d.r1, d.c1, d.r2, d.c2);
@@ -307,11 +343,54 @@
       return;
     }
     if (res.sum !== 10) {
-      flashTip('和是 ' + res.sum + '，不是 10');
+      flashTip('和是 ' + res.sum + '，还差 ' + Math.abs(10 - res.sum));
       haptic('light');
       return;
     }
     clearRect(d.r1, d.c1, d.r2, d.c2);
+  }
+
+  /* ---------------- 输入绑定（touch 优先） ---------------- */
+
+  function bindInput() {
+    var hasTouch = ('ontouchstart' in window) ||
+                   (navigator.maxTouchPoints > 0) ||
+                   (window.matchMedia && window.matchMedia('(pointer:coarse)').matches);
+
+    if (hasTouch) {
+      boardEl.addEventListener('touchstart', function (e) {
+        if (e.touches.length !== 1) { endDrag(); return; }
+        var t = e.touches[0];
+        if (beginDrag(t.clientX, t.clientY)) e.preventDefault();
+      }, { passive: false });
+
+      // 绑在 document 上：手指滑出棋盘甚至滑出屏幕边缘时仍然跟手
+      document.addEventListener('touchmove', function (e) {
+        if (!dragging) return;
+        if (e.touches.length !== 1) { endDrag(); return; }
+        e.preventDefault();
+        moveDrag(e.touches[0].clientX, e.touches[0].clientY);
+      }, { passive: false });
+
+      document.addEventListener('touchend', function () { endDrag(); });
+      document.addEventListener('touchcancel', function () { endDrag(); });
+    }
+
+    // 鼠标 / 触控板：桌面端与 iOS 模拟器
+    boardEl.addEventListener('mousedown', function (e) {
+      if (e.button !== 0) return;
+      e.preventDefault();
+      if (beginDrag(e.clientX, e.clientY)) {
+        document.addEventListener('mousemove', onMouseMove);
+        document.addEventListener('mouseup', onMouseUp);
+      }
+    });
+    function onMouseMove(e) { moveDrag(e.clientX, e.clientY); }
+    function onMouseUp() {
+      document.removeEventListener('mousemove', onMouseMove);
+      document.removeEventListener('mouseup', onMouseUp);
+      endDrag();
+    }
   }
 
   /* ---------------- 消除 ---------------- */
@@ -376,14 +455,8 @@
   /* ---------------- 绑定 ---------------- */
 
   function bindAll() {
-    boardEl.addEventListener('pointerdown', onDown);
-    boardEl.addEventListener('pointermove', onMove);
-    boardEl.addEventListener('pointerup', onUp);
-    boardEl.addEventListener('pointercancel', function () {
-      startCell = null;
-      endCell = null;
-      hideSel();
-    });
+    bindInput();
+
     boardEl.addEventListener('contextmenu', function (e) { e.preventDefault(); });
 
     document.getElementById('btnBomb').addEventListener('click', useBomb);
@@ -398,7 +471,7 @@
       setTimeout(layout, 220);
     });
 
-    // iOS 上双击缩放/回弹的兜底
+    // iOS 上双击缩放/多指回弹的兜底
     document.addEventListener('gesturestart', function (e) { e.preventDefault(); });
     document.addEventListener('touchmove', function (e) {
       if (e.touches.length > 1) e.preventDefault();
@@ -411,11 +484,9 @@
     try {
       bindAll();
       newGame();
-      // 字体加载完/地址栏收起后尺寸会变，补一次
       window.addEventListener('load', function () { setTimeout(layout, 80); });
       setTimeout(layout, 260);
     } catch (err) {
-      // 启动失败时不要白屏，把原因挂出来便于排查
       window.__bootError = (err && err.stack) || String(err);
       var t = document.getElementById('tip');
       if (t) t.textContent = '启动失败，请刷新重试';
@@ -433,8 +504,12 @@
   window.__sumten = {
     get grid() { return grid.slice(); },
     get score() { return score; },
+    get dragging() { return dragging; },
     findRect: findRect,
     sumOf: sumOf,
-    newGame: newGame
+    newGame: newGame,
+    _beginDrag: beginDrag,
+    _moveDrag: moveDrag,
+    _endDrag: endDrag
   };
 })();

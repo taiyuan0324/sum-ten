@@ -7,8 +7,13 @@ Page({
     cells: [],
     boardW: 0,
     boardH: 0,
+    cellW: 0,
+    cellH: 0,
     fontSize: 16,
     sel: null,
+    dragging: false,
+    sumText: '',
+    sumOk: false,
     iq: 0,
     best: 0,
     progress: 0,
@@ -38,8 +43,14 @@ Page({
     this.setData({
       boardW: cell * COLS,
       boardH: cell * ROWS,
+      cellW: cell,
+      cellH: cell,
       fontSize: Math.max(11, Math.floor(cell * 0.5)),
       best: (getApp().globalData.bestScore) || 0
+    }, () => {
+      // 必须等首次渲染完成再量，否则 rect 为空导致拖不动
+      this.measure();
+      setTimeout(() => this.measure(), 160);
     });
 
     this.grid = new Array(TOTAL).fill(0);
@@ -133,9 +144,12 @@ Page({
 
   onStart(e) {
     if (this.data.over) return;
-    if (!this.boardRect) this.measure();
+    if (!this.boardRect) {
+      this.measure();
+      return;                       // 首次还没量到，这一下忽略，下一次就正常
+    }
     const t = e.touches[0];
-    const p = this.hit(t.clientX, t.clientY);
+    const p = this.hit(t.clientX, t.clientY, false);
     if (!p) return;
     this.a = p;
     this.b = p;
@@ -145,9 +159,9 @@ Page({
   onMove(e) {
     if (!this.a) return;
     const t = e.touches[0];
-    const p = this.hit(t.clientX, t.clientY);
+    const p = this.hit(t.clientX, t.clientY, true);
     if (!p) return;
-    if (p.r !== this.b.r || p.c !== this.b.c) {
+    if (!this.b || p.r !== this.b.r || p.c !== this.b.c) {
       this.b = p;
       this.updateSel(this.a, p);
     }
@@ -159,10 +173,10 @@ Page({
     this.a = null;
     this.b = null;
     if (!a || !b) {
-      this.setData({ sel: null });
+      this.setData({ sel: null, dragging: false, sumText: '' });
       return;
     }
-    this.setData({ sel: null });
+    this.setData({ sel: null, dragging: false, sumText: '' });
 
     const r1 = Math.min(a.r, b.r);
     const r2 = Math.max(a.r, b.r);
@@ -188,14 +202,31 @@ Page({
     }
   },
 
-  hit(x, y) {
+  hit(x, y, clamp) {
     const bd = this.boardRect;
     if (!bd) return null;
+    let c = Math.floor((x - bd.left) / this.cellW);
+    let r = Math.floor((y - bd.top) / this.cellH);
+    if (clamp) {
+      // 手指滑出棋盘/屏幕边缘时贴边，松手前还能继续调整
+      if (r < 0) r = 0; else if (r >= ROWS) r = ROWS - 1;
+      if (c < 0) c = 0; else if (c >= COLS) c = COLS - 1;
+      return { r, c };
+    }
     if (x < bd.left || x > bd.right || y < bd.top || y > bd.bottom) return null;
-    const c = Math.floor((x - bd.left) / this.cellW);
-    const r = Math.floor((y - bd.top) / this.cellH);
     if (r < 0 || r >= ROWS || c < 0 || c >= COLS) return null;
     return { r, c };
+  },
+
+  sumIn(r1, c1, r2, c2) {
+    let sum = 0, cnt = 0;
+    for (let r = r1; r <= r2; r++) {
+      for (let c = c1; c <= c2; c++) {
+        const v = this.grid[r * COLS + c];
+        if (v) { sum += v; cnt++; }
+      }
+    }
+    return { sum, cnt };
   },
 
   updateSel(a, b) {
@@ -203,13 +234,18 @@ Page({
     const r2 = Math.max(a.r, b.r);
     const c1 = Math.min(a.c, b.c);
     const c2 = Math.max(a.c, b.c);
+    const res = this.sumIn(r1, c1, r2, c2);
+    const ok = res.sum === 10 && res.cnt > 0;
     this.setData({
       sel: {
         x: c1 * this.cellW,
         y: r1 * this.cellH,
         w: (c2 - c1 + 1) * this.cellW,
         h: (r2 - r1 + 1) * this.cellH
-      }
+      },
+      dragging: true,
+      sumOk: ok,
+      sumText: ok ? res.sum + ' ✓' : res.sum + ' / 10'
     });
   },
 

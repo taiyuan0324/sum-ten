@@ -62,7 +62,8 @@ html,body{
   overflow:hidden;
 }
 
-.cell{padding:1.4px}
+.cell{padding:1.4px;box-sizing:border-box;contain:layout}
+
 .tile{
   width:100%;height:100%;
   display:flex;align-items:center;justify-content:center;
@@ -70,18 +71,22 @@ html,body{
   border-radius:16%;
   font-weight:700;
   font-variant-numeric:tabular-nums;
-  will-change:transform,opacity;
-  transition:opacity .18s ease, transform .18s cubic-bezier(.3,.9,.3,1), background .18s;
+  /* 不要给 160 个格子都写 will-change：iOS 上会撑爆图层，反而闪屏/掉帧 */
+  contain:layout style;
+  transition:opacity .16s ease, transform .16s cubic-bezier(.3,.9,.3,1), background .16s;
 }
 .tile.gone{opacity:0;transform:scale(.4) rotate(6deg)}
+.cell.hl .tile{background:#fff6cf}
 
+/* 选框：transform 定位（合成层，不触发重排），描边用 box-shadow 外扩，
+   这样 width/height 与格子边长严格对齐，不会因为 2px 边框偏移半格 */
 .selbox{
-  position:absolute;display:none;pointer-events:none;z-index:5;
-  border:2px solid var(--accent);
-  background:rgba(255,213,74,.16);
-  border-radius:7px;
-  box-shadow:0 0 14px rgba(255,213,74,.35);
-  transition:left .06s linear,top .06s linear,width .06s linear,height .06s linear;
+  position:absolute;left:0;top:0;
+  display:none;pointer-events:none;z-index:5;
+  border:none;border-radius:6px;
+  background:rgba(255,213,74,.12);
+  box-shadow:0 0 0 2.5px var(--accent), 0 0 18px rgba(255,213,74,.45);
+  will-change:transform,width,height;
 }
 .sel-sum{
   position:fixed;display:none;z-index:60;pointer-events:none;
