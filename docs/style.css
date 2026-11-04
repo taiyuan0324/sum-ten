@@ -55,20 +55,22 @@ html,body{
 .board{
   position:relative;
   display:grid;
-  background:var(--board);
-  border-radius:11px;
-  box-shadow:0 10px 28px rgba(0,0,0,.45), inset 0 0 0 2px var(--board-line);
+  /* 内衬 5px：格子不贴板边，棋盘自身描边才看得见 */
+  padding:5px;
+  background:#16402f;
+  border-radius:16px;
+  box-shadow:0 12px 30px rgba(0,0,0,.45), inset 0 0 0 1.5px #2f7d5f;
   touch-action:none;
   overflow:hidden;
 }
 
-.cell{padding:1.4px;box-sizing:border-box;contain:layout}
+.cell{padding:1.6px;box-sizing:border-box;contain:layout;position:relative}
 
 .tile{
   width:100%;height:100%;
   display:flex;align-items:center;justify-content:center;
   background:var(--tile);color:var(--ink);
-  border-radius:16%;
+  border-radius:6px;
   font-weight:700;
   font-variant-numeric:tabular-nums;
   /* 不要给 160 个格子都写 will-change：iOS 上会撑爆图层，反而闪屏/掉帧 */
@@ -78,14 +80,22 @@ html,body{
 .tile.gone{opacity:0;transform:scale(.4) rotate(6deg)}
 .cell.hl .tile{background:#fff6cf}
 
-/* 选框：transform 定位（合成层，不触发重排），描边用 box-shadow 外扩，
-   这样 width/height 与格子边长严格对齐，不会因为 2px 边框偏移半格 */
+/* 消掉的格子留一个凹槽，避免棋盘上出现生硬的"缺块" */
+.cell.empty::before{
+  content:'';position:absolute;left:1.6px;top:1.6px;right:1.6px;bottom:1.6px;
+  border-radius:6px;background:rgba(4,26,18,.28);
+  box-shadow:inset 0 1px 2px rgba(0,0,0,.35);
+}
+
+/* 选框：描边改走 inset，画在格子边界「内侧」，
+   这样框的外沿与格子严丝合缝，不会比格子胖一圈、也不会溢出棋盘 */
 .selbox{
   position:absolute;left:0;top:0;
   display:none;pointer-events:none;z-index:5;
   border:none;border-radius:6px;
-  background:rgba(255,213,74,.12);
-  box-shadow:0 0 0 2.5px var(--accent), 0 0 18px rgba(255,213,74,.45);
+  background:rgba(255,213,74,.10);
+  box-shadow:inset 0 0 0 2.5px var(--accent);
+  filter:drop-shadow(0 0 7px rgba(255,213,74,.55));
   will-change:transform,width,height;
 }
 .sel-sum{

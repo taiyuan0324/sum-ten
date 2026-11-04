@@ -90,22 +90,24 @@
   display: flex;
   flex-wrap: wrap;
   align-content: flex-start;
-  background: #1f5c46;
-  border-radius: 10px;
-  box-shadow: 0 10px 28px rgba(0, 0, 0, .45), inset 0 0 0 2px #2d7d60;
+  padding: 5px;                 /* 内衬：格子不贴板边 */
+  background: #16402f;
+  border-radius: 16px;
+  box-shadow: 0 12px 30px rgba(0, 0, 0, .45), inset 0 0 0 1.5px #2f7d5f;
   overflow: hidden;
 }
 
 .cell {
-  padding: 1.5px;
+  padding: 1.6px;
   box-sizing: border-box;
   flex: 0 0 auto;
+  position: relative;
 }
 
 .tile {
   width: 100%;
   height: 100%;
-  border-radius: 14%;
+  border-radius: 6px;
   background: #fdfdfb;
   color: #141414;
   font-weight: 700;
@@ -121,11 +123,25 @@
   transform: scale(.5);
 }
 
+/* 消掉的格子留一个凹槽，避免棋盘上出现生硬的缺块 */
+.cell.empty::after {
+  content: '';
+  position: absolute;
+  left: 1.6px;
+  top: 1.6px;
+  right: 1.6px;
+  bottom: 1.6px;
+  border-radius: 6px;
+  background: rgba(4, 26, 18, .28);
+  box-shadow: inset 0 1px 2px rgba(0, 0, 0, .35);
+}
+
 .selbox {
   position: absolute;
-  border: 2px solid #ffd54a;
-  background: rgba(255, 213, 74, .18);
+  border: none;
   border-radius: 6px;
+  background: rgba(255, 213, 74, .10);
+  box-shadow: inset 0 0 0 2.5px #ffd54a;
   pointer-events: none;
   z-index: 5;
 }

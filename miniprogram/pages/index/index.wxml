@@ -24,7 +24,7 @@
       bindtouchend="onEnd"
       bindtouchcancel="onEnd"
     >
-      <view class="cell" wx:for="{{cells}}" wx:key="id" style="width:{{cellW}}px;height:{{cellH}}px">
+      <view class="cell {{item.dead ? 'empty' : ''}}" wx:for="{{cells}}" wx:key="id" style="width:{{cellW}}px;height:{{cellH}}px">
         <view class="tile {{item.gone ? 'gone' : ''}}" style="font-size:{{fontSize}}px">{{item.v}}</view>
       </view>
       <view

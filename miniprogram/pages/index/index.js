@@ -1,6 +1,7 @@
 const ROWS = 16;
 const COLS = 10;
 const TOTAL = ROWS * COLS;
+const PAD = 5;   // 棋盘内衬，需与 wxss 里 .board 的 padding 一致
 
 Page({
   data: {
@@ -31,8 +32,8 @@ Page({
 
     // 顶部 HUD + 底部工具 + 提示占用的高度
     const reserveH = 190;
-    const availW = winW - 24;
-    const availH = winH - reserveH;
+    const availW = winW - 24 - PAD * 2;
+    const availH = winH - reserveH - PAD * 2;
 
     let cell = Math.floor(Math.min(availW / COLS, availH / ROWS));
     if (cell < 18) cell = 18;
@@ -41,8 +42,8 @@ Page({
     this.cellH = cell;
 
     this.setData({
-      boardW: cell * COLS,
-      boardH: cell * ROWS,
+      boardW: cell * COLS + PAD * 2,
+      boardH: cell * ROWS + PAD * 2,
       cellW: cell,
       cellH: cell,
       fontSize: Math.max(11, Math.floor(cell * 0.5)),
@@ -96,7 +97,7 @@ Page({
     this.b = null;
 
     this.setData({
-      cells: g.map((v, i) => ({ v, id: i, gone: false })),
+      cells: g.map((v, i) => ({ v, id: i, gone: false, dead: false })),
       iq: 0,
       progress: 0,
       cleared: 0,
@@ -205,8 +206,8 @@ Page({
   hit(x, y, clamp) {
     const bd = this.boardRect;
     if (!bd) return null;
-    let c = Math.floor((x - bd.left) / this.cellW);
-    let r = Math.floor((y - bd.top) / this.cellH);
+    let c = Math.floor((x - bd.left - PAD) / this.cellW);
+    let r = Math.floor((y - bd.top - PAD) / this.cellH);
     if (clamp) {
       // 手指滑出棋盘/屏幕边缘时贴边，松手前还能继续调整
       if (r < 0) r = 0; else if (r >= ROWS) r = ROWS - 1;
@@ -238,8 +239,8 @@ Page({
     const ok = res.sum === 10 && res.cnt > 0;
     this.setData({
       sel: {
-        x: c1 * this.cellW,
-        y: r1 * this.cellH,
+        x: PAD + c1 * this.cellW,
+        y: PAD + r1 * this.cellH,
         w: (c2 - c1 + 1) * this.cellW,
         h: (r2 - r1 + 1) * this.cellH
       },
@@ -260,6 +261,7 @@ Page({
         if (this.grid[i]) {
           this.grid[i] = 0;
           upd['cells[' + i + '].gone'] = true;
+          upd['cells[' + i + '].dead'] = true;
           n++;
         }
       }

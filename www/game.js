@@ -15,6 +15,7 @@
   var TOTAL = ROWS * COLS;
   var BOMB_INIT = 3;
   var BEST_KEY = 'sumten_best_v2';
+  var PAD = 5;               // 棋盘内衬，必须与 style.css 里 .board 的 padding 一致
 
   var boardEl = document.getElementById('board');
   var selbox = document.getElementById('selbox');
@@ -90,16 +91,17 @@
     if (!wrapH || wrapH < 60) {
       wrapH = (window.innerHeight || 640) * 0.6;
     }
-    wrapW -= 2;
-    wrapH -= 2;
+    // 留出棋盘内衬和 1px 抗锯齿余量
+    wrapW -= (2 + PAD * 2);
+    wrapH -= (2 + PAD * 2);
 
     var s = Math.floor(Math.min(wrapW / COLS, wrapH / ROWS));
     if (s < 14) s = 14;
     if (s > 52) s = 52;
     cellSize = s;
 
-    boardEl.style.width = (s * COLS) + 'px';
-    boardEl.style.height = (s * ROWS) + 'px';
+    boardEl.style.width = (s * COLS + PAD * 2) + 'px';
+    boardEl.style.height = (s * ROWS + PAD * 2) + 'px';
     boardEl.style.gridTemplateColumns = 'repeat(' + COLS + ', ' + s + 'px)';
     boardEl.style.gridTemplateRows = 'repeat(' + ROWS + ', ' + s + 'px)';
 
@@ -235,8 +237,8 @@
 
   function pointToCell(x, y) {
     var br = boardEl.getBoundingClientRect();
-    var c = Math.floor((x - br.left) / cellSize);
-    var r = Math.floor((y - br.top) / cellSize);
+    var c = Math.floor((x - br.left - PAD) / cellSize);
+    var r = Math.floor((y - br.top - PAD) / cellSize);
     // 允许拖出棋盘：贴边取最近的格子，松手前都能继续调整
     if (r < 0) r = 0; else if (r >= ROWS) r = ROWS - 1;
     if (c < 0) c = 0; else if (c >= COLS) c = COLS - 1;
@@ -276,8 +278,8 @@
 
   function renderSel() {
     var d = bounds(dragFrom, dragTo);
-    var x = d.c1 * cellSize;
-    var y = d.r1 * cellSize;
+    var x = PAD + d.c1 * cellSize;
+    var y = PAD + d.r1 * cellSize;
     var w = (d.c2 - d.c1 + 1) * cellSize;
     var h = (d.r2 - d.r1 + 1) * cellSize;
 
@@ -407,6 +409,7 @@
             tiles[i].classList.add('gone');
             tiles[i].textContent = '';
           }
+          if (cellEls[i]) cellEls[i].classList.add('empty');
           n++;
         }
       }
